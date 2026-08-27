@@ -40,7 +40,7 @@ def numbered_entries(source: str) -> list[tuple[int, str]]:
                 match.end() : matches[index + 1].start()
                 if index + 1 < len(matches)
                 else len(source)
-            ].strip(" 、。\n"),
+            ].strip(" 、。\n】［］[]・"),
         )
         for index, match in enumerate(matches)
     ]
@@ -49,6 +49,43 @@ def numbered_entries(source: str) -> list[tuple[int, str]]:
 def extract_numbered_sections(source: str) -> dict[int, str]:
     """従来どおり、重複番号は後に入力された値を採用する。"""
     return dict(numbered_entries(source))
+
+
+def _bullet_items(content: str) -> list[str]:
+    cleaned = content.strip()
+    if not cleaned:
+        return []
+    parts = re.split(r"[\n、,]+", cleaned)
+    items = []
+    for part in parts:
+        item = part.strip(" ・。．.　")
+        if item:
+            items.append(item)
+    return items or [cleaned]
+
+
+def format_numbered_transcript(source: str) -> str:
+    """番号ごとに段落を分け、内容を箇条書きにする。"""
+    source = source.strip()
+    if not source:
+        return ""
+    entries = numbered_entries(source)
+    if not entries:
+        bullets = _bullet_items(source)
+        if len(bullets) <= 1:
+            return source
+        return "\n".join(f"・{item}" for item in bullets)
+
+    first = MARKER.search(re.sub(r"(?m)^(\s*[1-7])(?=[^\d.．、:：\s])", r"\1.", source))
+    preamble = source[: first.start()].strip() if first else ""
+    blocks: list[str] = []
+    if preamble:
+        blocks.append(preamble)
+    for number, content in entries:
+        lines = [f"【{number}】"]
+        lines.extend(f"・{item}" for item in _bullet_items(content))
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
 
 
 def validate_numbering(

@@ -9,13 +9,16 @@ import streamlit as st
 from st_copy import copy_button
 
 from rakusapo.common.registry import REPORT_TYPES, get_parser, parse_report
+from rakusapo.common.numbering import format_numbered_transcript
 from rakusapo.common.stt import transcribe_component_payload, transcribe_japanese
 from rakusapo.common.terms import (
     add_term,
     apply_learned_terms,
+    delete_term,
     export_terms_json,
     import_terms_json,
     load_custom_terms,
+    update_term,
 )
 from rakusapo.components.audio_capture import audio_capture
 
@@ -79,8 +82,10 @@ def clear_report() -> None:
 
 def append_transcript(spoken: str) -> None:
     corrected = apply_learned_terms(spoken, count_usage=True)
-    separator = "\n" if st.session_state.raw_speech.strip() else ""
-    st.session_state.raw_speech += separator + corrected
+    formatted = format_numbered_transcript(corrected)
+    separator = "\n\n" if st.session_state.raw_speech.strip() else ""
+    combined = (st.session_state.raw_speech + separator + formatted).strip()
+    st.session_state.raw_speech = format_numbered_transcript(combined)
 
 
 def handle_transcription(spoken: str, digest: str) -> None:
@@ -104,10 +109,11 @@ def transcribe_safely(runner) -> str:
 
 
 def normalize_transcript() -> None:
-    st.session_state.raw_speech = apply_learned_terms(
+    corrected = apply_learned_terms(
         st.session_state.raw_speech,
         count_usage=True,
     )
+    st.session_state.raw_speech = format_numbered_transcript(corrected)
 
 
 left, right = st.columns([1.1, 1.0])
@@ -120,8 +126,11 @@ with left:
         index=REPORT_TYPES.index(st.session_state.selected_temp),
     )
     st.session_state.selected_temp = selected
-    with st.expander("番号入力の例"):
-        st.code(get_parser(selected).guide, language=None, wrap_lines=True)
+    with st.expander("番号入力の例", expanded=False):
+        st.markdown(
+            "テンプレートのどの項目を話すかの目安です。\n\n"
+            + get_parser(selected).guide.replace("\n", "  \n")
+        )
 
     st.subheader("2. 話す、または入力する")
     st.caption(
@@ -169,7 +178,7 @@ with left:
     )
     action, clear = st.columns([2, 1])
     action.button(
-        "表記ゆれを補正",
+        "表記ゆれ補正・番号整形",
         on_click=normalize_transcript,
         use_container_width=True,
     )
@@ -180,7 +189,10 @@ if generate:
     if not st.session_state.raw_speech.strip():
         st.warning("音声またはテキストを入力してください。")
     else:
-        corrected = apply_learned_terms(st.session_state.raw_speech, count_usage=True)
+        corrected = format_numbered_transcript(
+            apply_learned_terms(st.session_state.raw_speech, count_usage=True)
+        )
+        st.session_state.raw_speech = corrected
         validation = get_parser(st.session_state.selected_temp).validate(corrected)
         st.session_state.number_warnings = validation.messages()
         st.session_state.editable_output = parse_report(
@@ -223,7 +235,7 @@ with right:
 
 st.divider()
 with st.expander("よく使う用語"):
-    st.caption("このパソコンにだけ覚えます。顧客名は登録しないでください。")
+    st.caption("この端末にだけ覚えます。顧客名は登録しないでください。追加・編集・削除ができます。")
     with st.form("term_form", clear_on_submit=True):
         first, second = st.columns(2)
         heard = first.text_input("認識される表記", placeholder="例：じゅうせつ")
@@ -248,12 +260,42 @@ with st.expander("よく使う用語"):
         "rakusapo_terms.json",
         "application/json",
     )
-    for source, data in sorted(
-        load_custom_terms().items(),
-        key=lambda item: item[1].get("uses", 0) if isinstance(item[1], dict) else 0,
-        reverse=True,
-    ):
-        st.caption(
-            f"{source} → {data.get('replacement', '')}"
-            f"（変換 {data.get('uses', 0)} 回）"
-        )
+    custom_terms = load_custom_terms()
+    if not custom_terms:
+        st.caption("まだ追加した用語はありません。")
+    else:
+        st.markdown("#### 登録済み用語の編集・削除")
+        for index, (source, data) in enumerate(
+            sorted(
+                custom_terms.items(),
+                key=lambda item: item[1].get("uses", 0) if isinstance(item[1], dict) else 0,
+                reverse=True,
+            )
+        ):
+            replacement = data.get("replacement", "") if isinstance(data, dict) else str(data)
+            uses = data.get("uses", 0) if isinstance(data, dict) else 0
+            row = st.columns([2.2, 2.2, 1, 1])
+            new_source = row[0].text_input(
+                "認識される表記",
+                value=source,
+                key=f"term_source_{index}",
+                label_visibility="collapsed",
+            )
+            new_replacement = row[1].text_input(
+                "正しい表記",
+                value=replacement,
+                key=f"term_replacement_{index}",
+                label_visibility="collapsed",
+            )
+            if row[2].button("更新", key=f"term_update_{index}", use_container_width=True):
+                try:
+                    update_term(source, new_replacement, new_source=new_source)
+                    st.success(f"「{source}」を更新しました。")
+                    st.rerun()
+                except ValueError as exc:
+                    st.error(str(exc))
+            if row[3].button("削除", key=f"term_delete_{index}", use_container_width=True):
+                delete_term(source)
+                st.success(f"「{source}」を削除しました。")
+                st.rerun()
+            st.caption(f"「{source}」→「{replacement}」（変換 {uses} 回）")

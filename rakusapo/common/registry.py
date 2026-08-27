@@ -26,12 +26,16 @@ class ParserDefinition:
         )
 
 
+def _guide(module: ModuleType) -> str:
+    return getattr(module, "GUIDE", "入力例はありません。")
+
+
 PARSERS = {
-    "損保更改": ParserDefinition("損保更改", sonpo_renewal, "1.自動車、9月30日、対面\n2.変化なし\n3.実施済\n4.該当なし\n5.22歳が運転するため本人配偶者限定を削除"),
-    "損保新規": ParserDefinition("損保新規", sonpo_new, "1.自動車、対面、配偶者\n2.保険料を抑えたい、補償を手厚くしたい\n3.GK クルマの保険\n4.該当なし\n5.引受条件を確認する"),
-    "生保新規": ParserDefinition("生保新規", seiho_new, "1.山田太郎、昭和55年、妻と子供一人、会社員、他社医療保険加入、ヒアリング\n2.自宅、配偶者\n3.教育資金を準備したい\n4.あいおい生命、オリックス生命、医療保険\n5.保険料を慎重に検討したい\n6.9/10 クロージング、見積書、クレジットカード\n7.数字での比較が有効"),
-    "生保アフター": ParserDefinition("生保アフター", seiho_after, "対応内容をそのまま話す、または入力してください。"),
-    "苦情対応": ParserDefinition("苦情対応", complaint, "受付内容、発生状況、対応内容、次回対応を入力してください。"),
+    "損保更改": ParserDefinition("損保更改", sonpo_renewal, _guide(sonpo_renewal)),
+    "損保新規": ParserDefinition("損保新規", sonpo_new, _guide(sonpo_new)),
+    "生保新規": ParserDefinition("生保新規", seiho_new, _guide(seiho_new)),
+    "生保アフター": ParserDefinition("生保アフター", seiho_after, _guide(seiho_after)),
+    "苦情対応": ParserDefinition("苦情対応", complaint, _guide(complaint)),
 }
 REPORT_TYPES = list(PARSERS)
 

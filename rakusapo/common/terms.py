@@ -36,8 +36,45 @@ def add_term(source: str, replacement: str) -> None:
     def merge(current):
         current = current if isinstance(current, dict) else {}
         old = current.get(source, {})
-        current[source] = {"replacement": replacement, "uses": old.get("uses", 0)}
+        uses = old.get("uses", 0) if isinstance(old, dict) else 0
+        current[source] = {"replacement": replacement, "uses": uses}
         return current
+    update_json(TERMS_FILE, {}, merge)
+
+
+def update_term(source: str, replacement: str, *, new_source: str | None = None) -> None:
+    """既存用語を更新する。変換元の表記も変えられる。"""
+    source = source.strip()
+    replacement = replacement.strip()
+    renamed = (new_source or source).strip()
+    if not source or not replacement or not renamed:
+        raise ValueError("変換元と正しい表記は空にできません。")
+    if renamed == replacement:
+        raise ValueError("変換元と正しい表記は異なる必要があります。")
+
+    def merge(current):
+        current = current if isinstance(current, dict) else {}
+        if source not in current:
+            raise ValueError(f"用語「{source}」が見つかりません。")
+        old = current.pop(source)
+        uses = old.get("uses", 0) if isinstance(old, dict) else 0
+        if renamed in current and renamed != source:
+            uses = max(uses, current[renamed].get("uses", 0) if isinstance(current[renamed], dict) else 0)
+        current[renamed] = {"replacement": replacement, "uses": uses}
+        return current
+
+    update_json(TERMS_FILE, {}, merge)
+
+
+def delete_term(source: str) -> None:
+    """登録済み用語を削除する。"""
+    source = source.strip()
+
+    def merge(current):
+        current = current if isinstance(current, dict) else {}
+        current.pop(source, None)
+        return current
+
     update_json(TERMS_FILE, {}, merge)
 
 

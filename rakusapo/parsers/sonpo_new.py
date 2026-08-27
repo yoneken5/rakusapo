@@ -10,6 +10,27 @@ from .helpers import select
 REQUIRED_NUMBERS = {1, 2, 3, 5}
 OPTIONAL_NUMBERS = {4}
 
+GUIDE = """【1.基本情報】
+・対象種目
+・面談手法
+・同席者
+例）1.自動車、対面、配偶者
+
+【2.当初の意向把握】（複数可）
+・保険料を抑えたい / 補償を手厚くしたい など
+例）2.保険料を抑えたい、補償を手厚くしたい
+
+【3.比較推奨・提案】
+・商品名
+例）3.GK クルマの保険
+
+【4.特定顧客への配慮】（任意）
+・高齢者対応など（未入力なら非該当）
+例）4.該当なし
+
+【5.特記事項・引受上の注意点】
+例）5.引受条件を確認する"""
+
 
 def parse(text: str) -> str:
     numbered = extract_numbered_sections(text)

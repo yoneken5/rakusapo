@@ -9,6 +9,14 @@ from .helpers import bullets, extract_name
 REQUIRED_NUMBERS: set[int] = set()
 OPTIONAL_NUMBERS = {1, 2, 3, 4, 5}
 
+GUIDE = """番号入力は不要です。受付から次回対応までまとめて話してください。
+
+【1】受付基本情報（受付日時・顧客氏名・区分）
+【2】発生状況・詳細
+【3】対応内容
+【4】今後の約束・Next Action
+【5】備考・所感"""
+
 
 def parse(text: str) -> str:
     date_match = re.search(r"(\d{1,2}月\d{1,2}日\d{1,2}時|\d{1,2}月\d{1,2}日)", text)
