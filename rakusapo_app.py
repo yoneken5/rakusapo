@@ -68,6 +68,8 @@ if "number_warnings" not in st.session_state:
     st.session_state.number_warnings = []
 if "capture_version" not in st.session_state:
     st.session_state.capture_version = 0
+if "generate_warning" not in st.session_state:
+    st.session_state.generate_warning = False
 if st.session_state.selected_temp not in REPORT_TYPES:
     st.session_state.selected_temp = REPORT_TYPES[0]
 
@@ -114,6 +116,26 @@ def normalize_transcript() -> None:
         count_usage=True,
     )
     st.session_state.raw_speech = format_numbered_transcript(corrected)
+
+
+def generate_report() -> None:
+    text = st.session_state.get("raw_speech", "")
+    if not str(text).strip():
+        st.session_state.generate_warning = True
+        st.session_state.number_warnings = []
+        st.session_state.editable_output = ""
+        return
+    st.session_state.generate_warning = False
+    corrected = format_numbered_transcript(
+        apply_learned_terms(str(text), count_usage=True)
+    )
+    st.session_state.raw_speech = corrected
+    validation = get_parser(st.session_state.selected_temp).validate(corrected)
+    st.session_state.number_warnings = validation.messages()
+    st.session_state.editable_output = parse_report(
+        corrected,
+        st.session_state.selected_temp,
+    )
 
 
 left, right = st.columns([1.1, 1.0])
@@ -183,22 +205,15 @@ with left:
         use_container_width=True,
     )
     clear.button("クリア", on_click=clear_report, use_container_width=True)
-    generate = st.button("日報テンプレートを生成", type="primary", use_container_width=True)
-
-if generate:
-    if not st.session_state.raw_speech.strip():
+    st.button(
+        "日報テンプレートを生成",
+        type="primary",
+        use_container_width=True,
+        on_click=generate_report,
+    )
+    if st.session_state.get("generate_warning"):
         st.warning("音声またはテキストを入力してください。")
-    else:
-        corrected = format_numbered_transcript(
-            apply_learned_terms(st.session_state.raw_speech, count_usage=True)
-        )
-        st.session_state.raw_speech = corrected
-        validation = get_parser(st.session_state.selected_temp).validate(corrected)
-        st.session_state.number_warnings = validation.messages()
-        st.session_state.editable_output = parse_report(
-            corrected,
-            st.session_state.selected_temp,
-        )
+        st.session_state.generate_warning = False
 
 with right:
     st.subheader("3. 内容を確認してコピーする")
