@@ -8,7 +8,7 @@
 共有URL: https://rakusapo.streamlit.app/
 
 ブラウザで開くだけで使えます。ログインは不要です。  
-Chrome または Edge を推奨します。
+iPhone でもマイク録音から文字化できます。
 
 ## 起動ファイル
 
