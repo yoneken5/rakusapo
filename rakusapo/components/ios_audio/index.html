@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 4px 0 8px;
+        background: transparent;
+      }
+      .wrap {
+        display: grid;
+        gap: 10px;
+      }
+      button,
+      label.file-btn {
+        appearance: none;
+        border: 0;
+        border-radius: 10px;
+        padding: 14px 16px;
+        font-size: 16px;
+        font-weight: 700;
+        text-align: center;
+        cursor: pointer;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      #record {
+        background: #1d4ed8;
+        color: #fff;
+      }
+      #record.recording {
+        background: #b91c1c;
+      }
+      label.file-btn {
+        background: #e2e8f0;
+        color: #0f172a;
+        display: block;
+      }
+      #file {
+        display: none;
+      }
+      .hint,
+      .status {
+        font-size: 13px;
+        line-height: 1.45;
+        color: #334155;
+      }
+      .status.error {
+        color: #b91c1c;
+        font-weight: 650;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <button id="record" type="button">録音を開始</button>
+      <label class="file-btn" for="file">音声ファイル／ボイスメモを選ぶ</label>
+      <input id="file" type="file" accept="audio/*,video/mp4,.m4a,.mp3,.wav,.caf,.aac" capture="user" />
+      <div class="hint">
+        iPhone は「録音を開始」か「ボイスメモを選ぶ」を使ってください。マイク許可を求められたら「許可」を選んでください。
+      </div>
+      <div id="status" class="status"></div>
+    </div>
+    <script>
+      function sendMessage(type, data) {
+        const payload = Object.assign({ isStreamlitMessage: true, type }, data);
+        window.parent.postMessage(payload, "*");
+      }
+      function setFrameHeight(height) {
+        sendMessage("streamlit:setFrameHeight", { height });
+      }
+      function setComponentValue(value) {
+        sendMessage("streamlit:setComponentValue", { value });
+      }
+      function ready() {
+        sendMessage("streamlit:componentReady", { apiVersion: 1 });
+        setFrameHeight(document.body.scrollHeight);
+      }
+
+      const recordBtn = document.getElementById("record");
+      const fileInput = document.getElementById("file");
+      const statusEl = document.getElementById("status");
+      let mediaRecorder = null;
+      let chunks = [];
+      let activeStream = null;
+
+      function setStatus(message, isError) {
+        statusEl.textContent = message || "";
+        statusEl.className = isError ? "status error" : "status";
+        setFrameHeight(document.body.scrollHeight);
+      }
+
+      function pickMimeType() {
+        const candidates = [
+          "audio/mp4",
+          "audio/aac",
+          "audio/webm;codecs=opus",
+          "audio/webm",
+        ];
+        for (const type of candidates) {
+          if (window.MediaRecorder && MediaRecorder.isTypeSupported(type)) {
+            return type;
+          }
+        }
+        return "";
+      }
+
+      function blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = String(reader.result || "");
+            const base64 = result.includes(",") ? result.split(",")[1] : result;
+            resolve(base64);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      async function emitAudio(blob, name) {
+        const base64 = await blobToBase64(blob);
+        setComponentValue({
+          name: name || "recording.audio",
+          mime: blob.type || "application/octet-stream",
+          data: base64,
+        });
+        setStatus("音声を送信しました。文字変換まで少し待ってください。", false);
+      }
+
+      function stopTracks() {
+        if (activeStream) {
+          activeStream.getTracks().forEach((track) => track.stop());
+          activeStream = null;
+        }
+      }
+
+      async function startRecording() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setStatus("このブラウザはマイク録音に対応していません。下の「音声ファイル／ボイスメモを選ぶ」を使ってください。", true);
+          return;
+        }
+        try {
+          activeStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+            },
+          });
+          const mimeType = pickMimeType();
+          chunks = [];
+          mediaRecorder = mimeType
+            ? new MediaRecorder(activeStream, { mimeType })
+            : new MediaRecorder(activeStream);
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) {
+              chunks.push(event.data);
+            }
+          };
+          mediaRecorder.onerror = () => {
+            setStatus("録音中にエラーが発生しました。もう一度試すか、ボイスメモから選んでください。", true);
+            resetRecorderUi();
+          };
+          mediaRecorder.onstop = async () => {
+            try {
+              const type = mediaRecorder.mimeType || mimeType || "audio/mp4";
+              const blob = new Blob(chunks, { type });
+              stopTracks();
+              if (!blob.size) {
+                setStatus("録音データが空でした。もう一度録音してください。", true);
+                return;
+              }
+              const ext = type.includes("webm") ? "webm" : type.includes("wav") ? "wav" : "m4a";
+              await emitAudio(blob, "iphone_recording." + ext);
+            } catch (error) {
+              setStatus("録音データの送信に失敗しました: " + error, true);
+            } finally {
+              resetRecorderUi();
+            }
+          };
+          mediaRecorder.start();
+          recordBtn.textContent = "録音を停止して文字にする";
+          recordBtn.classList.add("recording");
+          setStatus("録音中です。話し終わったらもう一度ボタンを押してください。", false);
+        } catch (error) {
+          stopTracks();
+          const name = error && error.name ? error.name : "";
+          if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+            setStatus("マイクが許可されていません。iPhoneの設定 > アプリ > Safari > マイク をオンにし、このサイトで「許可」を選んでください。", true);
+          } else if (name === "NotFoundError") {
+            setStatus("マイクが見つかりませんでした。音声ファイル／ボイスメモから選んでください。", true);
+          } else {
+            setStatus("録音を開始できませんでした。音声ファイル／ボイスメモから選んでください。", true);
+          }
+          resetRecorderUi();
+        }
+      }
+
+      function resetRecorderUi() {
+        recordBtn.textContent = "録音を開始";
+        recordBtn.classList.remove("recording");
+        mediaRecorder = null;
+        chunks = [];
+      }
+
+      function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          mediaRecorder.stop();
+        } else {
+          stopTracks();
+          resetRecorderUi();
+        }
+      }
+
+      recordBtn.addEventListener("click", () => {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          stopRecording();
+        } else {
+          startRecording();
+        }
+      });
+
+      fileInput.addEventListener("change", async () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) {
+          return;
+        }
+        try {
+          setStatus("音声ファイルを読み込んでいます…", false);
+          await emitAudio(file, file.name || "upload.audio");
+        } catch (error) {
+          setStatus("音声ファイルの読み込みに失敗しました: " + error, true);
+        } finally {
+          fileInput.value = "";
+        }
+      });
+
+      ready();
+    </script>
+  </body>
+</html>

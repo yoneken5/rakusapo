@@ -9,7 +9,7 @@ import streamlit as st
 from st_copy import copy_button
 
 from rakusapo.common.registry import REPORT_TYPES, get_parser, parse_report
-from rakusapo.common.stt import transcribe_japanese
+from rakusapo.common.stt import transcribe_component_payload, transcribe_japanese
 from rakusapo.common.terms import (
     add_term,
     apply_learned_terms,
@@ -17,6 +17,7 @@ from rakusapo.common.terms import (
     import_terms_json,
     load_custom_terms,
 )
+from rakusapo.components.audio_capture import audio_capture
 
 st.set_page_config(
     page_title="日報らくらくサポートくん (らくサポ)",
@@ -62,8 +63,8 @@ if "last_audio_digest" not in st.session_state:
     st.session_state.last_audio_digest = ""
 if "number_warnings" not in st.session_state:
     st.session_state.number_warnings = []
-if "audio_input_version" not in st.session_state:
-    st.session_state.audio_input_version = 0
+if "capture_version" not in st.session_state:
+    st.session_state.capture_version = 0
 if st.session_state.selected_temp not in REPORT_TYPES:
     st.session_state.selected_temp = REPORT_TYPES[0]
 
@@ -73,7 +74,33 @@ def clear_report() -> None:
     st.session_state.editable_output = ""
     st.session_state.number_warnings = []
     st.session_state.last_audio_digest = ""
-    st.session_state.audio_input_version += 1
+    st.session_state.capture_version += 1
+
+
+def append_transcript(spoken: str) -> None:
+    corrected = apply_learned_terms(spoken, count_usage=True)
+    separator = "\n" if st.session_state.raw_speech.strip() else ""
+    st.session_state.raw_speech += separator + corrected
+
+
+def handle_transcription(spoken: str, digest: str) -> None:
+    st.session_state.last_audio_digest = digest
+    if spoken:
+        append_transcript(spoken)
+        st.session_state.capture_version += 1
+        st.rerun()
+
+
+def transcribe_safely(runner) -> str:
+    try:
+        return runner()
+    except sr.UnknownValueError:
+        st.warning("音声を認識できませんでした。もう一度録音するか、下に直接入力してください。")
+    except sr.RequestError:
+        st.error("文字変換サービスに接続できませんでした。少し待って再試行するか、下に直接入力してください。")
+    except Exception as exc:  # noqa: BLE001 - 端末差のある音声エラーを画面へ出す
+        st.error(f"音声の変換に失敗しました: {exc}")
+    return ""
 
 
 def normalize_transcript() -> None:
@@ -98,37 +125,41 @@ with left:
 
     st.subheader("2. 話す、または入力する")
     st.caption(
-        "マイクボタンで録音→停止すると文字になります。"
-        "iPhone でも使えます。日報本文は保存しません。"
+        "iPhone は下の青い「録音を開始」を使ってください。"
+        "許可を求められたら「許可」を選びます。日報本文は保存しません。"
     )
-    audio = st.audio_input(
-        "マイクで録音",
-        sample_rate=16000,
-        key=f"voice_input_{st.session_state.audio_input_version}",
-        help="録音開始→話して→停止。しばらくすると下の入力欄へ文字が入ります。",
-    )
-    if audio is not None:
-        digest = str(hash(audio.getvalue()))
+    captured = audio_capture(key=f"ios_capture_{st.session_state.capture_version}")
+    if isinstance(captured, dict) and captured.get("data"):
+        digest = str(hash(captured.get("data")))
         if digest != st.session_state.last_audio_digest:
             with st.spinner("音声を文字に変換しています…"):
-                try:
-                    spoken = transcribe_japanese(audio)
-                except sr.UnknownValueError:
-                    st.warning("音声を認識できませんでした。もう一度録音するか、下に直接入力してください。")
-                    spoken = ""
-                except sr.RequestError:
-                    st.error("文字変換サービスに接続できませんでした。少し待って再試行するか、下に直接入力してください。")
-                    spoken = ""
-                except Exception as exc:  # noqa: BLE001 - 端末差のある音声エラーを画面へ出す
-                    st.error(f"音声の変換に失敗しました: {exc}")
-                    spoken = ""
-            st.session_state.last_audio_digest = digest
-            if spoken:
-                corrected = apply_learned_terms(spoken, count_usage=True)
-                separator = "\n" if st.session_state.raw_speech.strip() else ""
-                st.session_state.raw_speech += separator + corrected
-                st.session_state.audio_input_version += 1
-                st.rerun()
+                spoken = transcribe_safely(lambda: transcribe_component_payload(captured))
+            handle_transcription(spoken, digest)
+
+    with st.expander("パソコン用マイク（または別の録音方法）"):
+        audio = st.audio_input(
+            "マイクで録音",
+            sample_rate=None,
+            key=f"voice_input_{st.session_state.capture_version}",
+            help="録音開始→話して→停止。",
+        )
+        if audio is not None:
+            digest = str(hash(audio.getvalue()))
+            if digest != st.session_state.last_audio_digest:
+                with st.spinner("音声を文字に変換しています…"):
+                    spoken = transcribe_safely(lambda: transcribe_japanese(audio))
+                handle_transcription(spoken, digest)
+        uploaded = st.file_uploader(
+            "音声ファイルをアップロード",
+            type=["wav", "mp3", "m4a", "aac", "caf", "ogg", "webm", "mp4"],
+            key=f"audio_upload_{st.session_state.capture_version}",
+        )
+        if uploaded is not None:
+            digest = str(hash(uploaded.getvalue()))
+            if digest != st.session_state.last_audio_digest:
+                with st.spinner("音声を文字に変換しています…"):
+                    spoken = transcribe_safely(lambda: transcribe_japanese(uploaded))
+                handle_transcription(spoken, digest)
 
     st.text_area(
         "音声文字起こしテキスト",

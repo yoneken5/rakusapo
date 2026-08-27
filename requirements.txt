@@ -1,3 +1,4 @@
 streamlit>=1.61.0
 SpeechRecognition>=3.10.0
 st-copy>=2.0.0
+imageio-ffmpeg>=0.5.1
