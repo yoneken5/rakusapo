@@ -9,7 +9,7 @@ import streamlit as st
 from st_copy import copy_button
 
 from rakusapo.common.registry import REPORT_TYPES, get_parser, parse_report
-from rakusapo.common.numbering import format_numbered_transcript
+from rakusapo.common.transcript import format_numbered_transcript
 from rakusapo.common.stt import transcribe_component_payload, transcribe_japanese
 from rakusapo.common.terms import (
     add_term,
