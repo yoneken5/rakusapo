@@ -10,6 +10,7 @@ from st_copy import copy_button
 
 from rakusapo.common.demo import DEMO_INPUTS
 from rakusapo.common.registry import REPORT_TYPES, get_parser, parse_report
+from rakusapo.common.storage import is_streamlit_cloud
 from rakusapo.common.transcript import format_numbered_transcript
 from rakusapo.common.stt import transcribe_component_payload, transcribe_japanese
 from rakusapo.common.terms import (
@@ -263,7 +264,10 @@ with right:
 
 st.divider()
 with st.expander("よく使う用語"):
-    st.caption("この端末にだけ覚えます。顧客名は登録しないでください。追加・編集・削除ができます。")
+    if is_streamlit_cloud():
+        st.caption("この画面を開いているあいだだけ覚えます。共有しません。顧客名は登録しないでください。")
+    else:
+        st.caption("このパソコンにだけ覚えます。顧客名は登録しないでください。追加・編集・削除ができます。")
     with st.form("term_form", clear_on_submit=True):
         first, second = st.columns(2)
         heard = first.text_input("認識される表記", placeholder="例：じゅうせつ")

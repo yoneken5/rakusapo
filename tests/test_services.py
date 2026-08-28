@@ -5,6 +5,14 @@ from rakusapo.common.demo import DEMO_INPUTS
 from rakusapo.common.registry import REPORT_TYPES, get_parser
 
 
+def test_file_storage_is_used_outside_cloud(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage, "APP_DIR", tmp_path)
+    monkeypatch.delenv("RAKUSAPO_TERMS_IN_SESSION", raising=False)
+    assert storage.is_streamlit_cloud() is False
+    storage.atomic_write_json("rakusapo_terms.json", {"じゅうせつ": {"replacement": "重要事項説明", "uses": 0}})
+    assert (tmp_path / "rakusapo_terms.json").exists()
+
+
 def test_term_import_saves_locally(monkeypatch, tmp_path):
     monkeypatch.setattr(storage, "APP_DIR", tmp_path)
     count = terms.import_terms_json('{"じゅうせつ":{"replacement":"重要事項説明","uses":2}}')
