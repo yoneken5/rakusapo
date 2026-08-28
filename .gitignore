@@ -7,3 +7,5 @@ rakusapo_terms.json
 *.tmp
 .DS_Store
 Thumbs.db
+.streamlit/secrets.toml
+.pytest_cache/

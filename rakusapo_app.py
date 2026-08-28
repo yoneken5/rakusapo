@@ -8,6 +8,7 @@ import speech_recognition as sr
 import streamlit as st
 from st_copy import copy_button
 
+from rakusapo.common.demo import DEMO_INPUTS
 from rakusapo.common.registry import REPORT_TYPES, get_parser, parse_report
 from rakusapo.common.transcript import format_numbered_transcript
 from rakusapo.common.stt import transcribe_component_payload, transcribe_japanese
@@ -48,9 +49,9 @@ st.markdown(
     @media(max-width:700px){.hero-shell{padding:20px;border-radius:14px}.main-title{font-size:1.55rem}}
     </style>
     <div class="hero-shell">
-      <div class="eyebrow">あおぞら保険サービス</div>
+      <div class="eyebrow">あおぞら保険サービス ／ AIドリブンスクール卒業制作</div>
       <div class="main-title">日報らくらくサポートくん</div>
-      <div class="sub-title">話した内容を整理して、確認・コピーまでをひとつの画面で。</div>
+      <div class="sub-title">話した内容を整理して、確認・コピーまでをひとつの画面で。日報本文は保存しません。</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -138,6 +139,12 @@ def generate_report() -> None:
     )
 
 
+def load_demo() -> None:
+    kind = st.session_state.selected_temp
+    st.session_state.raw_speech = DEMO_INPUTS[kind]
+    generate_report()
+
+
 left, right = st.columns([1.1, 1.0])
 with left:
     st.subheader("1. 日報の種類を選ぶ")
@@ -148,6 +155,12 @@ with left:
         index=REPORT_TYPES.index(st.session_state.selected_temp),
     )
     st.session_state.selected_temp = selected
+    st.button(
+        "発表用デモを入力して生成",
+        use_container_width=True,
+        on_click=load_demo,
+    )
+    st.caption("審査・発表用の架空データです。実在の顧客情報は含みません。")
     with st.expander("番号入力の例", expanded=False):
         st.markdown(
             "テンプレートのどの項目を話すかの目安です。\n\n"
@@ -314,3 +327,9 @@ with st.expander("よく使う用語"):
                 st.success(f"「{source}」を削除しました。")
                 st.rerun()
             st.caption(f"「{source}」→「{replacement}」（変換 {uses} 回）")
+
+st.caption(
+    "AIドリブンスクール 卒業制作 ｜ "
+    "[ソースコード](https://github.com/yoneken5/rakusapo) ｜ "
+    "日報本文は保存しません。公開デモでは個人情報を入力しないでください。"
+)
