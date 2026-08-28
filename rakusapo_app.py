@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import speech_recognition as sr
 import streamlit as st
@@ -10,7 +11,6 @@ from st_copy import copy_button
 
 from rakusapo.common.demo import DEMO_INPUTS
 from rakusapo.common.registry import REPORT_TYPES, get_parser, parse_report
-from rakusapo.common.storage import is_streamlit_cloud
 from rakusapo.common.transcript import format_numbered_transcript
 from rakusapo.common.stt import transcribe_component_payload, transcribe_japanese
 from rakusapo.common.terms import (
@@ -264,7 +264,7 @@ with right:
 
 st.divider()
 with st.expander("よく使う用語"):
-    if is_streamlit_cloud():
+    if Path("/mount/src").exists():
         st.caption("この画面を開いているあいだだけ覚えます。共有しません。顧客名は登録しないでください。")
     else:
         st.caption("このパソコンにだけ覚えます。顧客名は登録しないでください。追加・編集・削除ができます。")

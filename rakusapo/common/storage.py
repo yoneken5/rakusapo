@@ -1,4 +1,4 @@
-"""用語辞書をアプリと同じフォルダへ保存する。公開デモではセッションだけに覚える。"""
+"""Save term dictionaries next to the app, or in the Streamlit session on Cloud."""
 
 from __future__ import annotations
 
@@ -23,12 +23,10 @@ def _session_store() -> Any | None:
         return None
     try:
         import streamlit as st
-        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        return st.session_state
     except Exception:
         return None
-    if get_script_run_ctx() is None:
-        return None
-    return st.session_state
 
 
 def data_path(filename: str) -> Path:
